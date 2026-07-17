@@ -1,12 +1,13 @@
 # Ignore videos, subtitles, and downloaded content
 downloads/
 
-# OS metadata
-.DS_Store
-
-# Temporary files
+# Temporary directories and files
+.tmp/
 temp_*
 *.ts
 *.m3u8
 *.mp4
 *.srt
+
+# OS metadata
+.DS_Store

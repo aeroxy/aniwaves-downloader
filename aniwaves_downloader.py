@@ -181,7 +181,7 @@ def download_segment(segment_info):
     if parsed_url.hostname:
         session.headers["Host"] = parsed_url.hostname
         
-    filename = f"{segment_prefix}_segment_{idx:04d}.ts"
+    filename = os.path.join(".tmp", f"{segment_prefix}_segment_{idx:04d}.ts")
     
     for attempt in range(3):
         try:
@@ -255,8 +255,12 @@ def download_stream(stream_m3u8_url, referer, output_filename, segment_prefix):
                     print(f"Critical error: segment {idx + 1} failed to download.")
                     return False
                     
+        # Create .tmp directory if it doesn't exist
+        if not os.path.exists(".tmp"):
+            os.makedirs(".tmp")
+            
         # Create local.m3u8 playlist file
-        local_m3u8_path = f"{segment_prefix}_local.m3u8"
+        local_m3u8_path = os.path.join(".tmp", f"{segment_prefix}_local.m3u8")
         with open(local_m3u8_path, "w", encoding="utf-8") as f:
             segment_idx = 0
             for line in lines:
