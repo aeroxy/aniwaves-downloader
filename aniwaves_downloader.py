@@ -293,7 +293,8 @@ def download_stream(stream_m3u8_url, referer, output_filename, segment_prefix):
                     f.write(line + "\n")
                 else:
                     # Write only the base filename because the m3u8 playlist resides in the same folder (.tmp)
-                    base_filename = os.path.basename(segment_files[segment_idx])
+                    seg_path = segment_files[segment_idx]
+                    base_filename = os.path.basename(seg_path) if seg_path else ""
                     f.write(f"{base_filename}\n")
                     segment_idx += 1
                     
