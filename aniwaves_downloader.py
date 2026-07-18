@@ -292,7 +292,9 @@ def download_stream(stream_m3u8_url, referer, output_filename, segment_prefix):
                 if line.startswith("#"):
                     f.write(line + "\n")
                 else:
-                    f.write(f"{segment_files[segment_idx]}\n")
+                    # Write only the base filename because the m3u8 playlist resides in the same folder (.tmp)
+                    base_filename = os.path.basename(segment_files[segment_idx])
+                    f.write(f"{base_filename}\n")
                     segment_idx += 1
                     
         print(f"Created local playlist: {local_m3u8_path}")
@@ -311,18 +313,19 @@ def download_stream(stream_m3u8_url, referer, output_filename, segment_prefix):
         print("Running:", " ".join(cmd))
         res = subprocess.run(cmd, capture_output=True, text=True)
         
-        # Clean up segments and local m3u8
-        os.remove(local_m3u8_path)
-        for seg_file in segment_files:
-            if seg_file and os.path.exists(seg_file):
-                os.remove(seg_file)
-                
         if res.returncode == 0:
             print(f"Video compiled successfully: {output_filename}")
+            # Clean up segments and local m3u8 ONLY on success
+            if os.path.exists(local_m3u8_path):
+                os.remove(local_m3u8_path)
+            for seg_file in segment_files:
+                if seg_file and os.path.exists(seg_file):
+                    os.remove(seg_file)
             return True
         else:
             print(f"FFmpeg failed with code {res.returncode}", file=sys.stderr)
             print("FFmpeg Stderr:", res.stderr, file=sys.stderr)
+            print("Temporary segment files have been preserved for debugging and resuming.", file=sys.stderr)
             return False
             
     except Exception as e:
