@@ -165,6 +165,14 @@ def select_best_resolution(master_m3u8_url, referer):
 def download_segment(segment_info):
     """Downloads a single .ts segment with retry mechanism."""
     idx, segment_url, base_url, referer, segment_prefix = segment_info
+    
+    # Create .tmp directory if it doesn't exist
+    if not os.path.exists(".tmp"):
+        try:
+            os.makedirs(".tmp")
+        except FileExistsError:
+            pass
+            
     session = requests.Session()
     session.headers.update({
         "Referer": referer,
