@@ -194,8 +194,10 @@ def download_segment(segment_info):
     
     # Check if final segment file already exists and has size > 0
     if os.path.exists(filename) and os.path.getsize(filename) > 0:
+        print(f"Skipping already downloaded segment {idx + 1}")
         return (idx, filename)
     
+    print(f"Downloading segment {idx + 1}...")
     for attempt in range(3):
         try:
             r = session.get(segment_url, timeout=30, verify=False)
