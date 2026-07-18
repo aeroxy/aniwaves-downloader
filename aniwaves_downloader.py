@@ -190,15 +190,27 @@ def download_segment(segment_info):
         session.headers["Host"] = parsed_url.hostname
         
     filename = os.path.join(".tmp", f"{segment_prefix}_segment_{idx:04d}.ts")
+    temp_filename = filename + ".part"
+    
+    # Check if final segment file already exists and has size > 0
+    if os.path.exists(filename) and os.path.getsize(filename) > 0:
+        return (idx, filename)
     
     for attempt in range(3):
         try:
             r = session.get(segment_url, timeout=30, verify=False)
             r.raise_for_status()
-            with open(filename, "wb") as f:
+            with open(temp_filename, "wb") as f:
                 f.write(r.content)
+            # Rename from .part to final name when completely written
+            os.replace(temp_filename, filename)
             return (idx, filename)
         except Exception as e:
+            if os.path.exists(temp_filename):
+                try:
+                    os.remove(temp_filename)
+                except:
+                    pass
             if attempt < 2:
                 import time
                 time.sleep(1)
