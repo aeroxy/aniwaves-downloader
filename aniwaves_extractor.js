@@ -193,10 +193,18 @@ async function run() {
                     jwplayer: playerInstanceMock,
                     localStorage: mockLocalStorage,
                     addEventListener: function(event, callback) {},
-                    removeEventListener: function(event, callback) {}
+                    removeEventListener: function(event, callback) {},
+                    setInterval: function() { return 0; },
+                    clearInterval: function() {},
+                    setTimeout: function() { return 0; },
+                    clearTimeout: function() {}
                 };
 
                 const sandbox = {
+                    setInterval: function() { return 0; },
+                    clearInterval: function() {},
+                    setTimeout: function() { return 0; },
+                    clearTimeout: function() {},
                     localStorage: mockLocalStorage,
                     URL: global.URL,
                     URLSearchParams: global.URLSearchParams,

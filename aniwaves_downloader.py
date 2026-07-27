@@ -198,7 +198,8 @@ def download_segment(segment_info):
         return (idx, filename)
     
     print(f"Downloading segment {idx + 1}...")
-    for attempt in range(3):
+    max_attempts = 6
+    for attempt in range(max_attempts):
         try:
             r = session.get(segment_url, timeout=30, verify=False)
             r.raise_for_status()
@@ -213,11 +214,17 @@ def download_segment(segment_info):
                     os.remove(temp_filename)
                 except:
                     pass
-            if attempt < 2:
+            if attempt < max_attempts - 1:
                 import time
-                time.sleep(1)
+                is_rate_limited = getattr(e, "response", None) is not None and e.response.status_code == 429
+                if is_rate_limited:
+                    retry_after = e.response.headers.get("Retry-After")
+                    delay = float(retry_after) if retry_after else min(2 ** attempt, 20)
+                else:
+                    delay = 1
+                time.sleep(delay)
             else:
-                print(f"Failed to download segment {idx + 1} after 3 attempts: {e}")
+                print(f"Failed to download segment {idx + 1} after {max_attempts} attempts: {e}")
                 return (idx, None)
 
 def download_stream(stream_m3u8_url, referer, output_filename, segment_prefix):
@@ -243,7 +250,7 @@ def download_stream(stream_m3u8_url, referer, output_filename, segment_prefix):
         # Download concurrently using ThreadPoolExecutor
         segment_files = [None] * total_segments
         failed_segments = []
-        max_workers = 10
+        max_workers = 4
         
         # Construct task list
         tasks = [
