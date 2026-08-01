@@ -10,6 +10,19 @@ from urllib.parse import urljoin, urlparse
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+def extractor_diagnostics(stderr, max_line=300):
+    """Trims the extractor's stderr so a minified player script can't bury the real error."""
+    useful = []
+    for line in (stderr or "").splitlines():
+        line = line.strip()
+        if not line or "NODE_TLS_REJECT_UNAUTHORIZED" in line or "trace-warnings" in line:
+            continue
+        if len(line) > max_line:
+            line = line[:max_line] + f"... [{len(line)} chars truncated]"
+        useful.append(line)
+    return "\n".join(useful) if useful else "(no diagnostics)"
+
+
 def run_node_extractor(url):
     """Executes the Node.js extractor script as a subprocess and parses the JSON result."""
     print(f"Running Node extractor for: {url}...")
@@ -21,21 +34,20 @@ def run_node_extractor(url):
         result = subprocess.run(
             ["node", extractor_path, url],
             capture_output=True,
-            text=True,
-            check=True
+            text=True
         )
-        
+
         # Parse output (skip any non-JSON lines like warnings from Node)
         stdout_lines = result.stdout.strip().split("\n")
         json_str = ""
         for line in stdout_lines:
             if line.strip().startswith("{") or json_str:
                 json_str += line + "\n"
-        
+
         if not json_str:
             print("Error: Extractor did not return valid JSON.", file=sys.stderr)
-            print("Stdout:", result.stdout, file=sys.stderr)
-            print("Stderr:", result.stderr, file=sys.stderr)
+            print(f"Extractor exit code: {result.returncode}", file=sys.stderr)
+            print("Stderr:", extractor_diagnostics(result.stderr), file=sys.stderr)
             return None
             
         return json.loads(json_str)

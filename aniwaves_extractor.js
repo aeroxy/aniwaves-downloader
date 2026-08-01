@@ -3,6 +3,15 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const https = require('https');
 const vm = require('vm');
 
+// The sandboxed player script schedules its own async work. If one of those
+// callbacks throws, it must not kill the process before we print our results.
+process.on('unhandledRejection', (err) => {
+    console.error(`Warning: async error in player script: ${err && err.message}`);
+});
+process.on('uncaughtException', (err) => {
+    console.error(`Warning: uncaught error in player script: ${err && err.message}`);
+});
+
 const watchUrl = process.argv[2];
 if (!watchUrl) {
     console.error(JSON.stringify({ error: "No watch URL provided as an argument" }));
@@ -141,7 +150,18 @@ async function run() {
                 innerHTML: ""
             };
 
-            const resultPromise = new Promise((resolve) => {
+            const resultPromise = new Promise((rawResolve) => {
+                // The player fetches its sources asynchronously, so give up after a
+                // while instead of hanging forever when setup() is never reached.
+                const timer = setTimeout(() => {
+                    console.error(`Warning: ${target.name} timed out before the player called setup().`);
+                    rawResolve(null);
+                }, 25000);
+                const resolve = function(config) {
+                    clearTimeout(timer);
+                    rawResolve(config);
+                };
+
                 const rawDocument = {
                     getElementById: function(id) {
                         if (id === 'mg-player') return mockElement;
@@ -166,6 +186,11 @@ async function run() {
                     clear: function() {}
                 };
 
+                // The player script patches HTMLVideoElement.prototype.canPlayType on
+                // Safari-like user agents. Without this global it throws a ReferenceError.
+                const mockHTMLVideoElement = function() {};
+                mockHTMLVideoElement.prototype.canPlayType = function() { return 'probably'; };
+
                 const playerInstanceMock = function(id) {
                     const playerInstance = {
                         setup: function(config) {
@@ -182,14 +207,16 @@ async function run() {
                     return playerInstance;
                 };
 
+                const mockNavigator = {
+                    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                };
+
                 const rawWindow = {
                     location: {
                         href: embedUrl,
                         search: new URL(embedUrl).search
                     },
-                    navigator: {
-                        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-                    },
+                    navigator: mockNavigator,
                     jwplayer: playerInstanceMock,
                     localStorage: mockLocalStorage,
                     addEventListener: function(event, callback) {},
@@ -197,7 +224,8 @@ async function run() {
                     setInterval: function() { return 0; },
                     clearInterval: function() {},
                     setTimeout: function() { return 0; },
-                    clearTimeout: function() {}
+                    clearTimeout: function() {},
+                    HTMLVideoElement: mockHTMLVideoElement
                 };
 
                 const sandbox = {
@@ -205,6 +233,9 @@ async function run() {
                     clearInterval: function() {},
                     setTimeout: function() { return 0; },
                     clearTimeout: function() {},
+                    HTMLVideoElement: mockHTMLVideoElement,
+                    // Read as a bare global (not just window.navigator) by the player script.
+                    navigator: mockNavigator,
                     localStorage: mockLocalStorage,
                     URL: global.URL,
                     URLSearchParams: global.URLSearchParams,
@@ -250,18 +281,19 @@ async function run() {
                 sandbox.jQuery = sandbox.$;
 
                 try {
-                    const modifiedCode = obfuscatedCode.replace(
-                        "d[aM('W1WH',0x230,0x8b2,0x4a6,0xc6)+aI(0xc9d,0x937,'6dQ8',0x5e9,0xa0b)+'l']",
-                        "(() => {})"
-                    );
-                    vm.runInNewContext(modifiedCode, sandbox);
+                    vm.runInNewContext(obfuscatedCode, sandbox);
                 } catch (e) {
-                    // Ignore execution errors
+                    // Report the reason but keep going: the player may still call
+                    // setup() from an async callback that was already scheduled.
+                    // Only the message -- the stack embeds the whole minified script.
+                    console.error(`Warning: ${target.name} player script threw: ${e && e.name}: ${e && e.message}`);
                 }
             });
 
             const playerConfig = await resultPromise;
-            output.results[target.name] = playerConfig;
+            if (playerConfig) {
+                output.results[target.name] = playerConfig;
+            }
         }
 
         console.log(JSON.stringify(output, null, 2));
