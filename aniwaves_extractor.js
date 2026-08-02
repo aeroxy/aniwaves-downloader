@@ -18,6 +18,22 @@ if (!watchUrl) {
     process.exit(1);
 }
 
+function parseJsonResponse(raw, label) {
+    const trimmed = (raw || '').trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+        const gatewayMatch = trimmed.match(/error code:\s*(\d+)/i);
+        if (gatewayMatch) {
+            throw new Error(`${label} failed: upstream returned gateway error ${gatewayMatch[1]} (not JSON) -- the site is likely down or timing out, try again shortly`);
+        }
+        throw new Error(`${label} failed: upstream returned a non-JSON response: ${trimmed.slice(0, 200) || '(empty body)'}`);
+    }
+    try {
+        return JSON.parse(trimmed);
+    } catch (e) {
+        throw new Error(`${label} failed: malformed JSON (${e.message})`);
+    }
+}
+
 function fetchPage(url, referer = '') {
     return new Promise((resolve, reject) => {
         const parsedUrl = new URL(url);
@@ -57,7 +73,7 @@ async function run() {
 
         const serverListUrl = `https://aniwaves.ru/ajax/server/list?servers=${animeId}&eps=${epNum}`;
         const serverListRaw = await fetchPage(serverListUrl, watchUrl);
-        const serverListJson = JSON.parse(serverListRaw);
+        const serverListJson = parseJsonResponse(serverListRaw, 'Server list request');
         
         if (serverListJson.status !== 200) {
             console.error(JSON.stringify({ error: `Failed to fetch server list: ${serverListJson.message}` }));
@@ -107,7 +123,7 @@ async function run() {
             const targetServer = target.server;
             const sourcesUrl = `https://aniwaves.ru/ajax/sources?id=${encodeURIComponent(targetServer.link_id)}&asi=0&autoPlay=0`;
             const sourcesRaw = await fetchPage(sourcesUrl, watchUrl);
-            const sourcesJson = JSON.parse(sourcesRaw);
+            const sourcesJson = parseJsonResponse(sourcesRaw, `Sources request (${target.name})`);
 
             if (!sourcesJson.status || !sourcesJson.result || !sourcesJson.result.url) {
                 continue;
